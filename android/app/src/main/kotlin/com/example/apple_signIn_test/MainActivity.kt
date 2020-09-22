@@ -1,4 +1,4 @@
-package com.example.apple_signIn_test
+package test.appleSignInTest.flutter
 
 import io.flutter.embedding.android.FlutterActivity
 
