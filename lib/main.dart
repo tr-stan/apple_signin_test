@@ -192,6 +192,7 @@ class _MyAppState extends State<MyApp> {
     });
     AuthorizationCredentialAppleID credential;
     try {
+      print('hiiiii');
       credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -200,12 +201,13 @@ class _MyAppState extends State<MyApp> {
         webAuthenticationOptions: WebAuthenticationOptions(
           clientId: 'com.wordbud.applesignintest',
           redirectUri: Uri.parse(
-            'https://remixed-flutter-sign-in-with-apple.glitch.me/callbacks/sign_in_with_apple',
+            'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/signInWithAppleCallback/',
           ),
         ),
         nonce: 'example-nonce',
         state: 'example-state',
       );
+      print('got credential');
     } catch (e, s) {
       print('login error: $e - stack: $s');
 
@@ -220,28 +222,40 @@ class _MyAppState extends State<MyApp> {
     try {
       // This is the endpoint that will convert an authorization code obtained
       // via Sign in with Apple into a session in your system
-      final signInWithAppleEndpoint = Uri(
-        scheme: 'https',
-        host: 'remixed-flutter-sign-in-with-apple.glitch.me',
-        path: '/sign_in_with_apple',
-        queryParameters: <String, String>{
-          'code': credential.authorizationCode,
-          'firstName': credential.givenName,
-          'lastName': credential.familyName,
-          'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
-          if (credential.state != null) 'state': credential.state,
-        },
-      );
-      print('Endpoint URI: $signInWithAppleEndpoint');
-      print(credential.identityToken);
+      print('posting to function compute');
+      final url =
+          'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/signInWithApple/';
+      final params = <String, String>{
+        'code': credential.authorizationCode,
+        'firstName': credential.givenName,
+        'lastName': credential.familyName,
+        'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
+        if (credential.state != null) 'state': credential.state,
+      };
+      // final signInWithAppleEndpoint = Uri(
+      //   scheme: 'https',
+      //   host: '5326590182919246.cn-hangzhou.fc.aliyuncs.com',
+      //   path: '/2016-08-15/proxy/first_api/signInWithApple',
+      //   queryParameters: <String, String>{
+      //     'code': credential.authorizationCode,
+      //     'firstName': credential.givenName,
+      //     'lastName': credential.familyName,
+      //     'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
+      //     if (credential.state != null) 'state': credential.state,
+      //   },
+      // );
+      // print('Endpoint URI: $signInWithAppleEndpoint');
+      print('credential identity token: ${credential.identityToken}');
 
       final session = await http.Client().post(
-        signInWithAppleEndpoint,
+        url,
+        body: params,
       );
+
       print('response body: ${session.body}');
       // final sessionDetails = await jsonDecode(session.body);
 
-      await secureStorage.write(key: 'session_details', value: 'applelogin');
+      await secureStorage.write(key: 'session_details', value: session.body);
 
       setState(() {
         isBusy = false;
