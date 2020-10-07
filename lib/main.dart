@@ -225,10 +225,13 @@ class _MyAppState extends State<MyApp> {
       print('posting to function compute');
       final url =
           'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/signInWithApple/';
+      // TODO: Improve null safety check for values given after first time signing in with apple
+      final firstName = credential.givenName ?? 'first name';
+      final lastName = credential.familyName ?? 'family name';
       final params = <String, String>{
         'code': credential.authorizationCode,
-        'firstName': credential.givenName,
-        'lastName': credential.familyName,
+        'firstName': firstName,
+        'lastName': lastName,
         'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
         if (credential.state != null) 'state': credential.state,
       };
