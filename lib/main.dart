@@ -219,15 +219,26 @@ class _MyAppState extends State<MyApp> {
     }
 
     print('Credential: $credential');
+    if (credential.givenName != null) {
+      await secureStorage.write(
+        key: "given_name",
+        value: credential.givenName,
+      );
+    }
+    if (credential.familyName != null) {
+      await secureStorage.write(
+        key: "family_name",
+        value: credential.familyName,
+      );
+    }
+    // TODO: Improve null safety check for values given after first time signing in with apple
+    var firstName = await secureStorage.read(key: 'given_name');
+    var lastName = await secureStorage.read(key: 'family_name');
     try {
       // This is the endpoint that will convert an authorization code obtained
       // via Sign in with Apple into a session in your system
-      print('posting to function compute');
       final url =
           'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/signInWithApple/';
-      // TODO: Improve null safety check for values given after first time signing in with apple
-      final firstName = credential.givenName ?? 'first name';
-      final lastName = credential.familyName ?? 'family name';
       final params = <String, String>{
         'code': credential.authorizationCode,
         'firstName': firstName,
@@ -247,23 +258,21 @@ class _MyAppState extends State<MyApp> {
       //     if (credential.state != null) 'state': credential.state,
       //   },
       // );
-      // print('Endpoint URI: $signInWithAppleEndpoint');
-      print('credential identity token: ${credential.identityToken}');
 
       final session = await http.Client().post(
         url,
         body: params,
       );
 
-      print('response body: ${session.body}');
-      // final sessionDetails = await jsonDecode(session.body);
+      final sessionDetails = await jsonDecode(session.body);
+      print('response body: ${sessionDetails}');
 
       await secureStorage.write(key: 'session_details', value: session.body);
 
       setState(() {
         isBusy = false;
         isLoggedIn = true;
-        name = 'Koguma';
+        name = sessionDetails['userName'];
         picture =
             'https://png.pngtree.com/element_our/20200610/ourmid/pngtree-cute-potatoes-image_2242564.jpg';
       });
