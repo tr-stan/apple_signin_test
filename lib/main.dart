@@ -38,6 +38,36 @@ enum AuthType {
   otherOAuth,
 }
 
+/// ------------------------------------
+///  User Class (for writing to cloud db)
+/// ------------------------------------
+class User {
+  final String givenName;
+  final String familyName;
+  final String email;
+  final String userId;
+
+  User({
+    @required this.givenName,
+    @required this.familyName,
+    @required this.email,
+    @required this.userId,
+  });
+
+  User.fromJson(Map<String, dynamic> json)
+      : givenName = json['givenName'],
+        familyName = json['familyName'],
+        email = json['email'],
+        userId = json['userId'];
+
+  Map<String, dynamic> toJson() => {
+        'givenName': givenName,
+        'familyName': familyName,
+        'email': email,
+        'userId': userId,
+      };
+}
+
 /// -----------------------------------
 ///           Profile Widget
 /// -----------------------------------
@@ -146,12 +176,14 @@ class _MyAppState extends State<MyApp> {
   String errorMessage;
   String name;
   String picture;
-  Future<String> authType = secureStorage.read(key: 'auth_type');
-  Future<String> givenName = secureStorage.read(key: 'given_name');
-  Future<String> familyName = secureStorage.read(key: 'family_name');
-  Future<String> email = secureStorage.read(key: 'email');
-  Future<String> userId = secureStorage.read(key: 'user_id');
-  Future<String> refreshToken = secureStorage.read(key: 'refresh_token');
+  String familyName;
+  String givenName;
+  // Future<String> authType = secureStorage.read(key: 'auth_type');
+  // Future<String> givenName = secureStorage.read(key: 'given_name');
+  // Future<String> familyName = secureStorage.read(key: 'family_name');
+  // Future<String> email = secureStorage.read(key: 'email');
+  // Future<String> userId = secureStorage.read(key: 'user_id');
+  // Future<String> refreshToken = secureStorage.read(key: 'refresh_token');
 
   @override
   Widget build(BuildContext context) {
@@ -236,13 +268,16 @@ class _MyAppState extends State<MyApp> {
 
     print('Credential: $credential');
     if (credential.givenName != null) {
-      secureStorage.write(key: 'given_name', value: credential.givenName);
+      print('given name: $givenName');
+      await secureStorage.write(key: 'given_name', value: credential.givenName);
     }
     if (credential.familyName != null) {
-      secureStorage.write(key: 'family_name', value: credential.familyName);
+      print('family name: $familyName');
+      await secureStorage.write(
+          key: 'family_name', value: credential.familyName);
     }
     if (credential.email != null) {
-      secureStorage.write(key: 'email', value: credential.email);
+      await secureStorage.write(key: 'email', value: credential.email);
     }
 
     try {
@@ -255,18 +290,6 @@ class _MyAppState extends State<MyApp> {
         'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
         if (credential.state != null) 'state': credential.state,
       };
-      // final signInWithAppleEndpoint = Uri(
-      //   scheme: 'https',
-      //   host: '5326590182919246.cn-hangzhou.fc.aliyuncs.com',
-      //   path: '/2016-08-15/proxy/first_api/signInWithApple',
-      //   queryParameters: <String, String>{
-      //     'code': credential.authorizationCode,
-      //     'firstName': credential.givenName,
-      //     'lastName': credential.familyName,
-      //     'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
-      //     if (credential.state != null) 'state': credential.state,
-      //   },
-      // );
 
       final response = await http.post(
         url,
@@ -278,18 +301,32 @@ class _MyAppState extends State<MyApp> {
       print(
           'refresh token: ${responseJson["accessTokenObject"]["refresh_token"]}');
 
-      secureStorage.write(
-        key: 'refresh_token',
-        value: responseJson['accessTokenObject']['refresh_token'],
-      );
-      secureStorage.write(
-        key: 'refresh_token_exp',
-        value: responseJson['idToken']['exp'],
-      );
+      if (responseJson['accessTokenObject']['refresh_token'] != null) {
+        secureStorage.write(
+          key: 'refresh_token',
+          value: responseJson['accessTokenObject']['refresh_token'],
+        );
+      }
+
       secureStorage.write(
           key: 'auth_type', value: describeEnum(AuthType.apple));
       secureStorage.write(
           key: 'user_id', value: responseJson['idToken']['sub']);
+
+      givenName = await secureStorage.read(key: 'given_name');
+      familyName = await secureStorage.read(key: 'family_name');
+      var email = await secureStorage.read(key: 'email');
+
+      var user = User.fromJson({
+        "givenName": givenName,
+        "familyName": familyName,
+        "email": email,
+        "userId": responseJson['idToken']['sub'],
+        // "refreshToken": responseJson['accessTokenObject']['refresh_token'],
+      });
+      http.post(
+          "https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/addUser/",
+          body: user.toJson());
 
       setState(() {
         isBusy = false;
@@ -361,10 +398,9 @@ class _MyAppState extends State<MyApp> {
 
   void logoutAction() async {
     await secureStorage.delete(key: 'refresh_token');
-    // await secureStorage.delete(key: 'given_name');
-    // await secureStorage.delete(key: 'family_name');
-    // await secureStorage.delete(key: 'email');
-    // await secureStorage.delete(key: 'auth_type');
+    await secureStorage.delete(key: 'user_id');
+    await secureStorage.delete(key: 'email');
+    await secureStorage.delete(key: 'auth_type');
     setState(() {
       isLoggedIn = false;
       isBusy = false;
@@ -380,15 +416,15 @@ class _MyAppState extends State<MyApp> {
   // further optimize this code by keeping track of accessTokenExpirationDateTime
   // and request a new accessToken only if the one at hand is expired.
   void initAction() async {
-    final currentTimestamp =
-        (DateTime.now().millisecondsSinceEpoch / 1000).round();
+    // final currentTimestamp =
+    //     (DateTime.now().millisecondsSinceEpoch / 1000).round();
     final storedRefreshToken = await secureStorage.read(key: 'refresh_token');
+    final storedAppleUserID = await secureStorage.read(key: 'user_id');
 
-    final refreshTokenExpiration =
-        await secureStorage.read(key: 'refresh_token_exp');
-    print(currentTimestamp);
-    if (storedRefreshToken == null ||
-        int.parse(refreshTokenExpiration) < currentTimestamp) return;
+    // final refreshTokenExpiration =
+    //     await secureStorage.read(key: 'refresh_token_exp');
+    // print(currentTimestamp);
+    if (storedRefreshToken == null) return;
 
     print('Stored Refresh Token: $storedRefreshToken');
 
@@ -398,41 +434,45 @@ class _MyAppState extends State<MyApp> {
 
     final authType = await secureStorage.read(key: 'auth_type');
 
-    if (authType == describeEnum(AuthType.apple)) {
-      var userCredentialState =
-          await SignInWithApple.getCredentialState(await userId);
+    if (authType == describeEnum(AuthType.apple) && storedAppleUserID != null) {
+      final userCredentialState =
+          await SignInWithApple.getCredentialState(storedAppleUserID);
+      print('Credential state: $userCredentialState');
       if (userCredentialState != CredentialState.authorized) {
-        // TODO: logout action?
-      }
-
-      try {
-        final url =
-            'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/appleGetRefreshToken/';
-        final params = <String, String>{
-          'token': storedRefreshToken,
-          'useBundleId': Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
-        };
-        final response = await http.post(url, body: params);
-        final responseJson = await jsonDecode(response.body);
-        print('Refresh token response: $responseJson');
-        await secureStorage.write(
-          key: 'refresh_token',
-          value: responseJson['accessTokenObject']['refresh_token'],
-        );
-        await secureStorage.write(
-          key: 'refresh_token_exp',
-          value: responseJson['idToken']['exp'],
-        );
-        setState(() {
-          isBusy = false;
-          isLoggedIn = true;
-          name = '$givenName $familyName';
-          picture =
-              'https://png.pngtree.com/element_our/20200610/ourmid/pngtree-cute-potatoes-image_2242564.jpg';
-        });
-      } catch (e, s) {
-        print('error on refresh token: $e - stack: $s');
         logoutAction();
+      } else {
+        try {
+          givenName = await secureStorage.read(key: 'given_name');
+          familyName = await secureStorage.read(key: 'family_name');
+          // final url =
+          //     'https://5326590182919246.cn-hangzhou.fc.aliyuncs.com/2016-08-15/proxy/first_api/appleGetRefreshToken/';
+          // final params = <String, String>{
+          //   'token': storedRefreshToken,
+          //   'useBundleId':
+          //       Platform.isIOS || Platform.isMacOS ? 'true' : 'false',
+          // };
+          // final response = await http.post(url, body: params);
+          // final responseJson = await jsonDecode(response.body);
+          // print('Refresh token response: $responseJson');
+          // await secureStorage.write(
+          //   key: 'refresh_token',
+          //   value: responseJson['accessTokenObject']['refresh_token'],
+          // );
+          // await secureStorage.write(
+          //   key: 'refresh_token_exp',
+          //   value: responseJson['idToken']['exp'],
+          // );
+          setState(() {
+            isBusy = false;
+            isLoggedIn = true;
+            name = '$givenName $familyName';
+            picture =
+                'https://png.pngtree.com/element_our/20200610/ourmid/pngtree-cute-potatoes-image_2242564.jpg';
+          });
+        } catch (e, s) {
+          print('error on refresh token: $e - stack: $s');
+          logoutAction();
+        }
       }
     } else {
       try {
